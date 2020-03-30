@@ -8,33 +8,34 @@ Created on Tue Mar 24 15:42:30 2020
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as scipy_interpolate
+import math
 
 
-def approximate_b_spline_path(x: list, y: list, n_path_points: int,
-                              degree: int = 3) -> tuple:
-    """
-    approximate points with a B-Spline path
-    :param x: x position list of approximated points
-    :param y: y position list of approximated points
-    :param n_path_points: number of path points
-    :param degree: (Optional) B Spline curve degree
-    :return: x and y position list of the result path
-    """
-    t = range(len(x))
-    x_tup = scipy_interpolate.splrep(t, x, k=degree)
-    y_tup = scipy_interpolate.splrep(t, y, k=degree)
-
-    x_list = list(x_tup)
-    x_list[1] = x + [0.0, 0.0, 0.0, 0.0]
-
-    y_list = list(y_tup)
-    y_list[1] = y + [0.0, 0.0, 0.0, 0.0]
-
-    ipl_t = np.linspace(0.0, len(x) - 1, n_path_points)
-    rx = scipy_interpolate.splev(ipl_t, x_list)
-    ry = scipy_interpolate.splev(ipl_t, y_list)
-
-    return rx, ry
+#def approximate_b_spline_path(x: list, y: list, n_path_points: int,
+#                              degree: int = 3) -> tuple:
+#    """
+#    approximate points with a B-Spline path
+#    :param x: x position list of approximated points
+#    :param y: y position list of approximated points
+#    :param n_path_points: number of path points
+#    :param degree: (Optional) B Spline curve degree
+#    :return: x and y position list of the result path
+#    """
+#    t = range(len(x))
+#    x_tup = scipy_interpolate.splrep(t, x, k=degree)
+#    y_tup = scipy_interpolate.splrep(t, y, k=degree)
+#
+#    x_list = list(x_tup)
+#    x_list[1] = x + [0.0, 0.0, 0.0, 0.0]
+#
+#    y_list = list(y_tup)
+#    y_list[1] = y + [0.0, 0.0, 0.0, 0.0]
+#
+#    ipl_t = np.linspace(0.0, len(x) - 1, n_path_points)
+#    rx = scipy_interpolate.splev(ipl_t, x_list)
+#    ry = scipy_interpolate.splev(ipl_t, y_list)
+#
+#    return rx, ry
 
 
 def interpolate_b_spline_path(x: list, y: list, n_path_points: int,
@@ -58,17 +59,27 @@ def interpolate_b_spline_path(x: list, y: list, n_path_points: int,
 def main():
     print(__file__ + " start!!")
     # way points
-    way_point_x = [-1.0, 3.0, 4.0, 2.0, 1.0, 8.0, 6.0, 5.0]
-    way_point_y = [0.0, -3.0, 1.0, 1.0, 3.0, 3.0, -3.0, 1.0]
+    way_point_x = [1.0, 2.0, 3.0, 4.0, 5.0]
+    way_point_y = [0.0,-3.0,-2.8, 1.0, 1.0]
+    x_t = []
+    y_t = []
+    theta = math.pi/6
+    r = 0.5;
+    
+    for i in range(len(way_point_x)):
+        x_t.append(way_point_x[i]+r*math.cos(theta))
+        x_t.append(way_point_x[i])
+        y_t.append(way_point_y[i]+r*math.sin(theta))
+        y_t.append(way_point_y[i])
+    print(x_t)
+    print(y_t)
     n_course_point = 1000  # sampling number
 
-    rax, ray = approximate_b_spline_path(way_point_x, way_point_y,
-                                         n_course_point)
-    rix, riy = interpolate_b_spline_path(way_point_x, way_point_y,
-                                         n_course_point)
+   # rax, ray = approximate_b_spline_path(way_point_x, way_point_y,n_course_point)
+    rix, riy = interpolate_b_spline_path(x_t, y_t,n_course_point)
 
     # show results
-    plt.plot(way_point_x, way_point_y, '-og', label="way points")
+    plt.plot(x_t, y_t, '-og', label="way points")
     #plt.plot(rax, ray, '-r', label="Approximated B-Spline path")
     plt.plot(rix, riy, '-b', label="Interpolated B-Spline path")
     plt.grid(True)
