@@ -1,94 +1,224 @@
-#!/usr/bin/env python
+"""
+Path tracking simulation with pure pursuit steering control and PID speed control.
+author: Atsushi Sakai (@Atsushi_twi)
+"""
+import numpy as np
+import math
+import matplotlib.pyplot as plt
 
-from common import *
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseArray, Pose, Twist
-from ackermann_msgs.msg import AckermannDriveStamped
-from angles import *
 
-import tf
+k = 0.1  # look forward gain
+Lfc = 2.0  # look-ahead distance
+Kp = 1.0  # speed proportional gain
+dt = 0.1  # [s]
+L = 2.9  # [m] wheel base of vehicle
 
-def waypointCallback(msg):
-  global waypoints
-  for i in range(len(msg.poses)):
-    waypoints[i, 0] = msg.poses[i].position.x
-    waypoints[i, 1] = msg.poses[i].position.y
-    waypoints[i, 2] = euler_from_quaternion([msg.poses[i].orientation.x, msg.poses[i].orientation.y, msg.poses[i].orientation.z, msg.poses[i].orientation.w])[2]
 
-def vehicleStateCallback(msg):
-  global rear_axle_center, rear_axle_theta, rear_axle_velocity
-  rear_axle_center.position.x = msg.pose.pose.position.x
-  rear_axle_center.position.y = msg.pose.pose.position.y
-  rear_axle_center.orientation = msg.pose.pose.orientation
+old_nearest_point_index = None
+show_animation = True
 
-  rear_axle_theta = euler_from_quaternion(
-    [rear_axle_center.orientation.x, rear_axle_center.orientation.y, rear_axle_center.orientation.z,
-     rear_axle_center.orientation.w])[2]
 
-  rear_axle_velocity.linear = msg.twist.twist.linear
-  rear_axle_velocity.angular = msg.twist.twist.angular
+class State:
 
-def pursuitToWaypoint(waypoint):
-  print waypoint
-  global rear_axle_center, rear_axle_theta, rear_axle_velocity, cmd_pub
-  rospy.wait_for_message("/ackermann_vehicle/ground_truth/state", Odometry, 5)
-  dx = waypoint[0] - rear_axle_center.position.x
-  dy = waypoint[1] - rear_axle_center.position.y
-  target_distance = math.sqrt(dx*dx + dy*dy)
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
+        self.x = x
+        self.y = y
+        self.yaw = yaw
+        self.v = v
+        self.rear_x = self.x - ((L / 2) * math.cos(self.yaw))
+        self.rear_y = self.y - ((L / 2) * math.sin(self.yaw))
 
-  cmd = AckermannDriveStamped()
-  cmd.header.stamp = rospy.Time.now()
-  cmd.header.frame_id = "base_link"
-  cmd.drive.speed = rear_axle_velocity.linear.x
-  cmd.drive.acceleration = max_acc
-  while target_distance > waypoint_tol:
 
-    dx = waypoint[0] - rear_axle_center.position.x
-    dy = waypoint[1] - rear_axle_center.position.y
-    lookahead_dist = np.sqrt(dx * dx + dy * dy)
-    lookahead_theta = math.atan2(dy, dx)
-    alpha = shortest_angular_distance(rear_axle_theta, lookahead_theta)
+def update(state, a, delta):
 
-    cmd.header.stamp = rospy.Time.now()
-    cmd.header.frame_id = "base_link"
-    # Publishing constant speed of 1m/s
-    cmd.drive.speed = 1
+    state.x = state.x + state.v * math.cos(state.yaw) * dt
+    state.y = state.y + state.v * math.sin(state.yaw) * dt
+    state.yaw = state.yaw + state.v / L * math.tan(delta) * dt
+    state.v = state.v + a * dt
+    state.rear_x = state.x - ((L / 2) * math.cos(state.yaw))
+    state.rear_y = state.y - ((L / 2) * math.sin(state.yaw))
 
-    # Reactive steering
-    if alpha < 0:
-      st_ang = max(-max_steering_angle, alpha)
+    return state
+
+
+def PIDControl(target, current, reverse = True):
+    a = Kp * (target - current)
+    if (reverse):
+        a = Kp * (-target - current)
+    return a
+
+
+def pure_pursuit_control(state, cx, cy, pind):
+
+    ind = calc_target_index(state, cx, cy)
+
+    if pind >= ind:
+        ind = pind
+
+    if ind < len(cx):
+        tx = cx[ind]
+        ty = cy[ind]
     else:
-      st_ang = min(max_steering_angle, alpha)
+        tx = cx[-1]
+        ty = cy[-1]
+        ind = len(cx) - 1
 
-    cmd.drive.steering_angle = st_ang
+    alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - (state.yaw)
+    Lf = k * state.v + Lfc # adaptive based on velocity
 
-    target_distance = math.sqrt(dx * dx + dy * dy)
+    delta = math.atan2(2.0 * L * math.sin(alpha) / Lf, 1.0)
 
-    cmd_pub.publish(cmd)
-    rospy.wait_for_message("/ackermann_vehicle/ground_truth/state", Odometry, 5)
+    return delta, ind
+
+def calc_distance(state, point_x, point_y):
+
+    dx = state.rear_x - point_x
+    dy = state.rear_y - point_y
+    return math.sqrt(dx ** 2 + dy ** 2)
+
+
+def calc_target_index(av, cx, cy):
+    last_waypointx = cx[len(cx) - 1]
+    last_waypointy = cy[len(cy) - 1]
+    Lf = k * av.v + Lfc
+    
+    global old_nearest_point_index
+
+    if (calc_distance(av,last_waypointx,last_waypointy) >= Lf):
+        if old_nearest_point_index is None:
+            # search nearest point index (should happen at first call of this function
+            dx = [av.x - icx for icx in cx]
+            dy = [av.y - icy for icy in cy]
+            d = [abs(math.sqrt(idx ** 2 + idy ** 2)) for (idx, idy) in zip(dx, dy)]
+            ind = d.index(min(d))
+            old_nearest_point_index = ind
+        else:
+            # what is done to find the most likely index if we have a previous index
+            ind = old_nearest_point_index
+            distance_this_index = calc_distance(av, cx[ind], cy[ind])
+            while True:
+                if ((ind + 1) < len(cx)):
+                    # iterate
+                    ind = ind + 1
+                    distance_next_index = calc_distance(av, cx[ind], cy[ind])
+                    if distance_this_index < distance_next_index:
+                        break
+                    distance_this_index = distance_next_index
+                else:
+                    break
+            old_nearest_point_index = ind
+
+    L = 0.0
+    
+    # search look ahead target point index
+    # target last point if we are at the end of the path
+    if (calc_distance(av,last_waypointx,last_waypointy) >= Lf):
+        while Lf > L and (ind + 1) < len(cx):
+            dx = cx[ind] - av.x
+            dy = cy[ind] - av.y
+            L = math.sqrt(dx ** 2 + dy ** 2)
+            ind += 1
+    else:
+        ind = len(cx) - 1
+        
+    return ind
+# 
+# def calc_target_index(state, cx, cy):
+# 
+#     global old_nearest_point_index
+# 
+#     if old_nearest_point_index is None:
+#         # search nearest point index
+#         dx = [state.rear_x - icx for icx in cx]
+#         dy = [state.rear_y - icy for icy in cy]
+#         d = [abs(math.sqrt(idx ** 2 + idy ** 2)) for (idx, idy) in zip(dx, dy)]
+#         ind = d.index(min(d))
+#         old_nearest_point_index = ind
+#     else:
+#         ind = old_nearest_point_index
+#         distance_this_index = calc_distance(state, cx[ind], cy[ind])
+#         while True:
+#             ind = ind + 1 if (ind + 1) < len(cx) else ind
+#             distance_next_index = calc_distance(state, cx[ind], cy[ind])
+#             if distance_this_index < distance_next_index:
+#                 break
+#             distance_this_index = distance_next_index
+#         old_nearest_point_index = ind
+# 
+#     L = 0.0
+# 
+#     Lf = k * state.v + Lfc
+# 
+#     # search look ahead target point index
+#     while Lf > L and (ind + 1) < len(cx):
+#         dx = cx[ind] - state.rear_x
+#         dy = cy[ind] - state.rear_y
+#         L = math.sqrt(dx ** 2 + dy ** 2)
+#         ind += 1
+# 
+#     return ind
+
+
+def plot_arrow(x, y, yaw, length=1.0, width=0.5, fc="r", ec="k"):
+    """
+    Plot arrow
+    """
+
+    if not isinstance(x, float):
+        for (ix, iy, iyaw) in zip(x, y, yaw):
+            plot_arrow(ix, iy, iyaw)
+    else:
+        plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw),
+                  fc=fc, ec=ec, head_width=width, head_length=width)
+        plt.plot(x, y)
+
+
+def main():
+    #  target course
+    cx = np.arange(0, 50, 0.1)
+    cy = [math.sin(ix / 5.0) * ix / 2.0 for ix in cx]
+
+    target_speed = 10.0 / 3.6  # [m/s]
+
+    T = 100.0  # max simulation time
+
+    # initial state
+    state = State(x=-0.0, y=-3.0, yaw=0.0, v=0.0)
+
+    lastIndex = len(cx) - 1
+    time = 0.0
+    x = [state.x]
+    y = [state.y]
+    yaw = [state.yaw]
+    v = [state.v]
+    t = [0.0]
+    target_ind = calc_target_index(state, cx, cy)
+
+    while T+100 >= time and calc_distance(state,cx[-1],cy[-1]) > 1: # and lastIndex > target_ind:
+        ai = PIDControl(target_speed, state.v)
+        di, target_ind = pure_pursuit_control(state, cx, cy, target_ind)
+        state = update(state, ai, di)
+
+        time = time + dt
+
+        x.append(state.x)
+        y.append(state.y)
+        yaw.append(state.yaw)
+        v.append(state.v)
+        t.append(time)
+
+        if show_animation:  # pragma: no cover
+            plt.cla()
+            plot_arrow(state.x, state.y, state.yaw)
+            plt.plot(cx, cy, "-r", linewidth = 3, label="course")
+            plt.plot(x, y, "-b", label="trajectory")
+            plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
+            plt.axis("equal")
+            plt.grid(True)
+            plt.title("Model Predictive Control Trajectory: Speed[km/h]:" + str(state.v * 3.6)[:4])
+            plt.pause(0.001)
+
 
 
 if __name__ == '__main__':
-
-  rospy.init_node('pure_pursuit')
-  cmd_pub = rospy.Publisher('/ackermann_vehicle/ackermann_cmd', AckermannDriveStamped, queue_size=10)
-
-  waypoints = np.zeros((num_waypoints, 3))
-  rospy.Subscriber("/ackermann_vehicle/waypoints",
-                   PoseArray,
-                   waypointCallback)
-  rospy.wait_for_message("/ackermann_vehicle/waypoints", PoseArray, 5)
-
-
-  rear_axle_center = Pose()
-  rear_axle_velocity = Twist()
-  rospy.Subscriber("/ackermann_vehicle/ground_truth/state",
-                   Odometry, vehicleStateCallback)
-  rospy.wait_for_message("/ackermann_vehicle/ground_truth/state", Odometry, 5)
-
-  for w in waypoints:
-    pursuitToWaypoint(w)
-
-
-
-
+    main()
