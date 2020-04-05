@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on Tue Mar 24 15:42:30 2020
@@ -38,8 +39,8 @@ import math
 #    return rx, ry
 
 
-def interpolate_b_spline_path(x: list, y: list, n_path_points: int,
-                              degree: int = 3) -> tuple:
+def interpolate_b_spline_path(x,y, n_path_points,
+                              degree):
     """
     interpolate points with a B-Spline path
     :param x: x positions of interpolated points
@@ -76,7 +77,7 @@ def main():
     n_course_point = 1000  # sampling number
 
    # rax, ray = approximate_b_spline_path(way_point_x, way_point_y,n_course_point)
-    rix, riy = interpolate_b_spline_path(x_t, y_t,n_course_point)
+    rix, riy = interpolate_b_spline_path(x_t, y_t,n_course_point,1)
 
     # show results
     plt.plot(x_t, y_t, '-og', label="way points")

@@ -66,7 +66,9 @@ def bspline (waypoints, angles, pose_length, degree, sf, graph_enable):
     if (graph_enable == 1):
         plt.figure()
         plt.plot(x_t, y_t, 'ro', out[0], out[1], 'b')
-        plt.legend(['Points', 'Interpolated B-spline', 'True'],loc='best')
+        plt.plot(waypoints[:,0],waypoints[:,1],'yo',markersize = 7)
+        plt.legend(['Appended Points', 'Interpolated B-spline',
+ 'Waypoints'],loc='best')
         plt.axis([min(x)-1, max(x)+1, min(y)-1, max(y)+1])
         plt.title('B-Spline interpolation')
         plt.show()
@@ -80,8 +82,8 @@ def main():
                 (-3, 0), (-2.5, -4), (0, -1), (2.5, -4), (3, -1)])
     
     #------------------- angle values for testing purposes ONLY --------------#
-    angles = np.array([math.pi/4, math.pi/4, math.pi/4, math.pi/4, math.pi/4, 
-                       math.pi/4, math.pi/4, math.pi/4, math.pi/4, math.pi/4])
+    angles = np.array([math.pi/4, math.pi/2, math.pi/4, math.pi/2, math.pi/4, 
+                       math.pi/4, math.pi/2, math.pi/4, math.pi/2, math.pi/4])
     
     #-------------------------------------------------------------------------#
     

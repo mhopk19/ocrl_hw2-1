@@ -35,6 +35,3 @@ if __name__ == '__main__':
   while not rospy.is_shutdown():
     waypoints_pub.publish(waypoint_array)
     r.sleep()
-
-
-
