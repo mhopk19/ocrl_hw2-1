@@ -32,7 +32,7 @@ old_nearest_point_index = None
 # basis spline variables
 planned_traj = None
 
-advanced_method = 1 # whether or not we are using the advanced method
+method = 1 # whether or not we are using the advanced method
 
 import tf
 
@@ -103,29 +103,26 @@ def advancedPursuit(waypoint,traj,reverse = False):
     prev_speed = np.linalg.norm([rear_axle_velocity.linear.z,rear_axle_velocity.linear.x,rear_axle_velocity.linear.y],2)
     # Reactive Speed
     Kp = .1
-    target_speed = min(1 + 2/(abs(st_ang) + 1) ,target_distance)
+    target_speed = min(3 ,target_distance)
     if (reverse == True):
       ai = np.sign(-target_speed - prev_speed) * max(-3,min(3,abs(Kp * (-target_speed - prev_speed))))
     else:
       ai = np.sign(target_speed - prev_speed) * max(-3,min(3,abs(Kp * (target_speed - prev_speed))))
-    #new_speed = min(prev_speed + ai,lookahead_dist+.1)
-    new_speed = prev_speed + ai
-    #cmd.drive.speed = min(10,max(new_speed,-10))
+    new_speed = min(prev_speed + ai,lookahead_dist+.1)
+    #new_speed = prev_speed + ai
 
     if (target_distance < .67 * math.pi):
-      cmd.drive.speed = .5
+      cmd.drive.speed = min(1,lookahead_dist+.1)
       Lfc = .05
       k = 0
     else:
       Lfc = .33
-      k = .2
+      k = 0.1
       cmd.drive.speed = min(10,max(new_speed,-5))
 
-    # steering
+    # finding target index
     di, target_ind = pursuit.pure_pursuit_control(vstate,traj[0],traj[1],target_ind)
-    # set commands
     cmd.drive.steering_angle = st_ang
-    #cmd.drive.speed = 1 # prev_speed + ai
     cmd_pub.publish(cmd)
     rospy.wait_for_message("/ackermann_vehicle/ground_truth/state", Odometry, 5)
 
@@ -138,9 +135,9 @@ def advancedPursuit(waypoint,traj,reverse = False):
     plt.pause(0.001)
 
     # then update state
-    #vstate = pursuit.update(vstate,ai,di,dt = .1)
     vstate.x = rear_axle_center.position.x
     vstate.y = rear_axle_center.position.y
+    vstate.yaw = rear_axle_theta
     vstate.v = new_speed
     print("ai:{} di:{} prev_speed:{} deltat:{}".format(ai,di,prev_speed,deltat))
     print("vstate:x:{} vstate:y:{} vstate:v:{}".format(vstate.x,vstate.y,vstate.v))
@@ -177,8 +174,6 @@ def pursuitToWaypoint(waypoint):
       st_ang = min(max_steering_angle, alpha)
 
     cmd.drive.steering_angle = st_ang
-    # adaptive speed component
-    #cmd.drive.speed = 1 + math.cos(st_ang)
 
     target_distance = math.sqrt(dx * dx + dy * dy)
 
@@ -196,8 +191,6 @@ def plot2dtraj():
     # plotting the planned trajectory
     if (planned_traj != None):
       plt.plot(planned_traj[0],planned_traj[1],'r',linewidth=1.5)
-      plt.plot(planned_traj[0][0],planned_traj[1][0],'y',marker = "*", markersize = 15) # starting point
-      plt.plot(planned_traj[0][-1],planned_traj[1][-1],'y',marker = "x",markersize = 15) # end point
 
     # once we get the new state we can plot the data
     plt.plot(trajectory_data[0],trajectory_data[1],'b-')
@@ -239,7 +232,7 @@ if __name__ == '__main__':
   # main control loop
   start_time = time.clock()
 
-  if (advanced_method): # using the advanced robust method
+  if (method == 1): # using the advanced robust method
     # once we have the waypoints we create a basis spline trajectory
     temp_waypoints = waypoints.copy()
     temp_waypoints = np.insert(waypoints, 0, [rear_axle_center.position.x,rear_axle_center.position.y,rear_axle_theta], axis = 0)
@@ -249,7 +242,7 @@ if __name__ == '__main__':
     for i,w in enumerate(waypoints):
       print(i)
       temp_waypoints = np.append(temp_waypoints, [w], axis = 0)
-      planned_traj = bsplines.bspline(np.array([(x,y) for x,y,yaw in temp_waypoints]),np.array([yaw for x,y,yaw in temp_waypoints]),L,3,0)
+      planned_traj = bsplines.bspline(np.array([(x,y) for x,y,yaw in temp_waypoints]),np.array([yaw for x,y,yaw in temp_waypoints]),L*10,3,0)
       old_nearest_point_index = None
       advancedPursuit(w,planned_traj)
       temp_waypoints = temp_waypoints[1:]

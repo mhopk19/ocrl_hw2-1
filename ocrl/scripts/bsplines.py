@@ -51,11 +51,12 @@ def bspline (waypoints, angles, pose_length, degree, sf, graph_enable = 0):
     #---------- generating the extra waypoints for pose ---------------#
     
     for i in range(len(x)):
+        #x_t.append(x[i])
+        x_t.append(x[i]+pose_length*math.cos(angles[i]-math.pi))
         x_t.append(x[i])
-        x_t.append(x[i]+pose_length*math.cos(angles[i]))
+        #y_t.append(y[i])
+        y_t.append(y[i]+pose_length*math.sin(angles[i]-math.pi))
         y_t.append(y[i])
-        y_t.append(y[i]+pose_length*math.sin(angles[i]))
-    
     #----------- generating spline trajectory -------------------------#
     
     tck,u = interpolate.splprep([x_t,y_t],k=2,s=0)

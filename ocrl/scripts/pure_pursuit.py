@@ -80,7 +80,7 @@ def calc_distance(state, point_x, point_y):
 def calc_target_index(av, cx, cy):
     last_waypointx = cx[len(cx) - 1]
     last_waypointy = cy[len(cy) - 1]
-    Lf = Lfc + k * av.v
+    Lf = Lfc #+ k * av.v
 
     global old_nearest_point_index
 
