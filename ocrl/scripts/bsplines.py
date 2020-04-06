@@ -37,7 +37,8 @@ import matplotlib.pyplot as plt
 
 # ----------------- defining the function for b spline ----------------#
 
-def bspline (waypoints, angles, pose_length, degree, sf, graph_enable):
+
+def bspline (waypoints, angles, pose_length, degree, sf, graph_enable = 0):
     
     #---------- extracting the x and y values into different arrays----#
     
@@ -57,7 +58,7 @@ def bspline (waypoints, angles, pose_length, degree, sf, graph_enable):
     
     #----------- generating spline trajectory -------------------------#
     
-    tck,u = interpolate.splprep([x_t,y_t],k=5,s=0)
+    tck,u = interpolate.splprep([x_t,y_t],k=2,s=0)
     u=np.linspace(0,1,num=100,endpoint=True)
     out = interpolate.splev(u,tck)
     
@@ -74,7 +75,26 @@ def bspline (waypoints, angles, pose_length, degree, sf, graph_enable):
         plt.show()
     
     return out
-    
+
+
+def tuple_dist(p1,p2):
+    return math.sqrt( (p1[0] - p2[0]) ** 2 + (p1[1] - p2[1] ** 2) )
+
+#def get_waypoint_indices(trajectory,points,tol = 0.1):
+#    traj_list = zip(list(trajectory[0]),list(trajectory[1]))
+#    print("trajectory list:{}".format(traj_list))
+#    result = [0]
+#    point_ind = 1
+#    for i,v in enumerate(traj_list):
+#      if (i != 0):
+#        val = (points[point_ind][0],points[point_ind][1])
+#        print("current point:{}".format(traj_list[i]))
+#        print("next waypoint:{}".format(point_ind
+#        if ( tuple_dist(traj_list[i],val) < tol):
+#          result.append(i)
+#    return result
+
+
 def main():
     
     #---------------- waypoint values for testing purposes ONLY --------------#
@@ -99,3 +119,4 @@ def main():
     
 if __name__ == '__main__':
     main()
+

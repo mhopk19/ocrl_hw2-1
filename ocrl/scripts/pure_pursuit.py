@@ -7,11 +7,11 @@ import math
 import matplotlib.pyplot as plt
 
 
-k = 0.1  # look forward gain
-Lfc = 2.0  # look-ahead distance
+k = 1  # look forward gain
+Lfc = 1  # look-ahead distance
 Kp = 1.0  # speed proportional gain
 dt = 0.1  # [s]
-L = 2.9  # [m] wheel base of vehicle
+L = .33  # [m] wheel base of vehicle
 
 
 old_nearest_point_index = None
@@ -29,7 +29,7 @@ class State:
         self.rear_y = self.y - ((L / 2) * math.sin(self.yaw))
 
 
-def update(state, a, delta):
+def update(state, a, delta, dt = .1):
 
     state.x = state.x + state.v * math.cos(state.yaw) * dt
     state.y = state.y + state.v * math.sin(state.yaw) * dt
@@ -80,36 +80,20 @@ def calc_distance(state, point_x, point_y):
 def calc_target_index(av, cx, cy):
     last_waypointx = cx[len(cx) - 1]
     last_waypointy = cy[len(cy) - 1]
-    Lf = k * av.v + Lfc
-    
+    Lf = Lfc + k * av.v
+
     global old_nearest_point_index
 
     if (calc_distance(av,last_waypointx,last_waypointy) >= Lf):
-        if old_nearest_point_index is None:
             # search nearest point index (should happen at first call of this function
-            dx = [av.x - icx for icx in cx]
-            dy = [av.y - icy for icy in cy]
-            d = [abs(math.sqrt(idx ** 2 + idy ** 2)) for (idx, idy) in zip(dx, dy)]
-            ind = d.index(min(d))
-            old_nearest_point_index = ind
-        else:
-            # what is done to find the most likely index if we have a previous index
-            ind = old_nearest_point_index
-            distance_this_index = calc_distance(av, cx[ind], cy[ind])
-            while True:
-                if ((ind + 1) < len(cx)):
-                    # iterate
-                    ind = ind + 1
-                    distance_next_index = calc_distance(av, cx[ind], cy[ind])
-                    if distance_this_index < distance_next_index:
-                        break
-                    distance_this_index = distance_next_index
-                else:
-                    break
-            old_nearest_point_index = ind
+          dx = [av.x - icx for icx in cx]
+          dy = [av.y - icy for icy in cy]
+          d = [abs(math.sqrt(idx ** 2 + idy ** 2)) for (idx, idy) in zip(dx, dy)]
+          ind = d.index(min(d))
+          old_nearest_point_index = ind
 
     L = 0.0
-    
+
     # search look ahead target point index
     # target last point if we are at the end of the path
     if (calc_distance(av,last_waypointx,last_waypointy) >= Lf):
@@ -120,7 +104,7 @@ def calc_target_index(av, cx, cy):
             ind += 1
     else:
         ind = len(cx) - 1
-        
+
     return ind
 # 
 # def calc_target_index(state, cx, cy):
