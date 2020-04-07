@@ -7,8 +7,8 @@ import math
 import matplotlib.pyplot as plt
 
 
-k = 1  # look forward gain
-Lfc = 1  # look-ahead distance
+k = .2  # look forward gain
+Lfc = .8  # look-ahead distance
 Kp = 1.0  # speed proportional gain
 dt = 0.1  # [s]
 L = .33  # [m] wheel base of vehicle
@@ -77,10 +77,16 @@ def calc_distance(state, point_x, point_y):
     return math.sqrt(dx ** 2 + dy ** 2)
 
 
-def calc_target_index(av, cx, cy):
+def calc_target_index(av, cx, cy, new_Lf = None, new_k = None):
+    global Lfc,k
     last_waypointx = cx[len(cx) - 1]
     last_waypointy = cy[len(cy) - 1]
-    Lf = Lfc #+ k * av.v
+    print("Lfc:{} k:{}".format(Lfc,k))
+    if (new_Lf != None):
+      Lfc = new_Lf
+    if (new_k != None):
+      k = new_k
+    Lf = Lfc + k * av.v
 
     global old_nearest_point_index
 
